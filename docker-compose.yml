@@ -1,0 +1,62 @@
+version: '3.5'
+
+services:
+
+  web:
+    image: web
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    volumes:
+      - '.:/usr/src/app'
+    ports:
+      - 5002:5000
+    environment:
+      - APP_NAME=Easy To Vote
+      - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=0
+      - APP_SETTINGS=project.server.config.ProductionConfig
+      - DATABASE_URL=postgres://postgres:postgres@web-db:5432/users_dev
+      - DATABASE_TEST_URL=postgres://postgres:postgres@web-db:5432/users_test
+      - SECRET_KEY=change_me_in_prod
+    depends_on:
+      - web-db
+
+  web-db:
+    container_name: web-db
+    build:
+      context: ./project/server/db
+      dockerfile: Dockerfile
+    ports:
+      - 5435:5432
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+
+
+  nginx-web:
+    image: nginx
+    volumes:
+       - ./ssl:/etc/ssl
+       - ./nginx/easytovote.org.template:/etc/nginx/conf.d/easytovote.org.template
+    ports:
+     - "80:80"
+     - "443:443"
+    environment:
+     - NGINX_HOST=easytovote.org
+     - NGINX_PORT=80
+     - SSL_PRIVKEY_FILE=/etc/ssl/privkey.pem
+     - SSL_CERTIFICATE_FILE=/etc/ssl/cert.pem
+     - WEB=web
+     - ADDXFORWARDEDFOR=$$proxy_add_x_forwarded_for
+     - REALIP=$$remote_addr
+     - HTTPUPGRADE=$$http_upgrade
+     - CONNECTION_UPGRADE=$$connection_upgrade
+     - REDIRECTURI=https://easytovote.org$$request_uri
+     - FLOWER_URL=http://flower:5555
+     - HOST=$$host
+     - DOLLARHACK=$$
+     - ONEDOLLARHACK=$$1
+    command: /bin/bash -c "envsubst < /etc/nginx/conf.d/easytovote.org.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"
+    depends_on:
+     - web
